@@ -15,7 +15,9 @@
 int clone_and_exec_child(int argc, char* args[])
 {
     pr_info("executing clone\n");
-    int flags = CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUTS;
+    // TODO: TIME, CGROUP and USER namespaces
+    int flags = CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUTS | CLONE_NEWIPC
+        | CLONE_NEWNET;
     int pid = syscall(SYS_clone, SIGCHLD | flags, 0, NULL, NULL, 0);
 
     if (pid == -1) {
@@ -23,6 +25,7 @@ int clone_and_exec_child(int argc, char* args[])
         return -1;
     } else if (pid == 0) {
         // child
+        // TODO: use pivot_root
         if (chroot("/") == -1) {
             pr_err("error in chroot: %s\n", strerror(errno));
             return -1;
