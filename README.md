@@ -1,5 +1,51 @@
 # Low Level Container Runtime
 
+## How to run
+
+1. Build the program using gcc :
+
+```
+$> gcc container.c -o container -lcap
+```
+
+2. Extract rootfs from a dockerfile :
+```shell
+# the rootfs will be here
+$ mkdir rootfs && cd rootfs
+
+# run a docker container, it will pull the image
+$ docker run --name nginx nginx:latest
+
+# export the fs
+$ docker export nginx -o nginx.tar.gz
+
+# cleanup the nginx container
+$ docker stop nginx && docker rm -vf nginx
+
+$ tar -xvf nginx.tar.gz
+$ rm nginx.tar.gz
+
+# check the rootfs
+$ ls -la
+
+# now we cannot use this directly as this is present under "/" 
+# which is the current mount, we need to mount it on /tmp
+$ sudo mkdir /tmp/rootfs
+$ sudo mount --bind ./rootfs /tmp/rootfs
+```
+
+3. Run the program as root :
+```
+#> ./container --rootfs <root_fs_path> -- <command> [command_args]
+
+Example:
+#> ./container --rootfs /tmp/rootfs -- /bin/bash
+```
+
+Remember, the rootfs cannot be on the current mounted root, pivot_root will give out error.
+
+## Playground
+
 - `playground/` has small standalone programs that I used for practising. 
 
 To build the program run `gcc container.c -o container -lcap` <br />
@@ -7,9 +53,19 @@ To run the program you need `CAP_SYS_ADMIN`, so you can use sudo: `sudo ./contai
 
 ## Notes
 
-This is also available at my gist : https://gist.github.com/sheharyaar/5cfaa933a8483080c9f1b2129a6135c3#file-network-namespace-md
+- For a basic container `cpuacct`/`cpu`, `memory` and `devices` (eBPF based for cgroups v2) cgroup controllers are only needed.
+
+### Notion Notes
+
+My notes are available as Notion web-sites, they will be updated as I understand these technologies better :
+
+- [Namespaces](https://spark-root-5d4.notion.site/Namespaces-11d47299d3a48059999aff7c7b12037f?pvs=74) | Notion
+- [CGroups](https://spark-root-5d4.notion.site/Control-Groups-11d47299d3a480fb8bebcacf1dc78bd9) | Notion
 
 ### Steps to create a pair of namespace and connect them
+
+This is also available at my gist : https://gist.github.com/sheharyaar/5cfaa933a8483080c9f1b2129a6135c3#file-network-namespace-md
+
 
 1. Create the namespaces using `sudo ip netns add <ns_name>`
 
