@@ -192,7 +192,7 @@ int container_run(container_ctx* ctx)
         pr_info("rootfs setup succesful\n");
 
         pr_info("execing the program\n");
-        if (execve(ctx->args[0], ctx->args, environ) == -1) {
+        if (execve(ctx->args[0], ctx->args, NULL) == -1) {
             pr_err("error in execve: %s\n", strerror(errno));
             return -1;
         }
