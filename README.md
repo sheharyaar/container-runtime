@@ -48,9 +48,9 @@ Remember, the rootfs cannot be on the current mounted root, `pivot_root` will gi
 
 - [X] clone setup
 - [X] filesystem Setup
-- [] cgroup limits setup
-- [] environment var and tty setup
-- [] network setup (to be done after I study more about kernel networking and netlink, or as part of CNI implementation in near future)
+- [ ] cgroup limits setup
+- [ ] environment var and tty setup
+- [ ] network setup (to be done after I study more about kernel networking and netlink, or as part of CNI implementation in near future)
 
 ## Playground
 
