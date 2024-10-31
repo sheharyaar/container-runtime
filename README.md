@@ -2,10 +2,10 @@
 
 ## How to run
 
-1. Build the program using gcc :
+1. Build the program using gcc (this requires libnl and libcap, so make sure you have these libraries):
 
 ```
-$> gcc container.c -o container -lcap
+$> make
 ```
 
 2. Extract rootfs from a dockerfile :
