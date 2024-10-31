@@ -42,7 +42,15 @@ Example:
 #> ./container --rootfs /tmp/rootfs -- /bin/bash
 ```
 
-Remember, the rootfs cannot be on the current mounted root, pivot_root will give out error.
+Remember, the rootfs cannot be on the current mounted root, `pivot_root` will give out error.
+
+### TODO
+
+- [X] clone setup
+- [X] filesystem Setup
+- [] cgroup limits setup
+- [] environment var and tty setup
+- [] network setup (to be done after I study more about kernel networking and netlink, or as part of CNI implementation in near future)
 
 ## Playground
 

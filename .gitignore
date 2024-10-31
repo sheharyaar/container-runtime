@@ -1,3 +1,7 @@
 container
 .vscode/*
 rootfs
+
+.cache/
+*.o
+compile_commands.json
