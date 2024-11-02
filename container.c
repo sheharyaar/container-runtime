@@ -1,4 +1,7 @@
 #define _GNU_SOURCE
+#include <sched.h>
+#include <signal.h>
+#include <stdint.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,6 +9,8 @@
 #include <sys/capability.h>
 #include <sys/wait.h>
 #include <syscall.h>
+#include <linux/sched.h>
+#include <stdint.h>
 
 #include "container.h"
 
@@ -13,7 +18,7 @@ void print_usage()
 {
         fprintf(stdout, "Usage:\n");
         fprintf(stdout,
-            "# ./container --rootfs <rootfs_path> -- <command> "
+            "# ./container --rootfs <rootfs_path> --memory <memory_limit> -- <command> "
             "[command_args]\n");
 }
 
@@ -27,6 +32,7 @@ container_ctx* ctx_new(void)
 
         ctx->child_pid = -1;
         ctx->parent_pid = -1;
+	ctx->cgroup_fd = -1;
         ctx->flags = 0;
         ctx->args = NULL;
         return ctx;
@@ -35,11 +41,19 @@ container_ctx* ctx_new(void)
 // parse options and set parameters
 int parse_cmd(int argc, char* argv[], container_ctx* ctx)
 {
-        if (argc < 5) {
+        if (argc < 7) {
                 pr_err("insufficient arguments\n");
         }
 
         if (strncmp(argv[1], "--rootfs", strlen("--rootfs")) != 0) {
+                return -1;
+        }
+
+        if (strncmp(argv[3], "--memory", strlen("--memory")) != 0) {
+                return -1;
+        }
+
+        if (strncmp(argv[5], "--", 2) != 0) {
                 return -1;
         }
 
@@ -50,11 +64,14 @@ int parse_cmd(int argc, char* argv[], container_ctx* ctx)
         }
         ctx->rootfs[MAX_PATH_LEN] = '\0';
 
-        if (strncmp(argv[3], "--", 2) != 0) {
+        strncpy(ctx->mem_max, argv[4], MAX_MEMCG_LEN);
+        if (ctx->rootfs[0] == '\0' || ctx->rootfs[0] != '/') {
+                pr_err("invalid rootfs path, path should be absolute");
                 return -1;
         }
+        ctx->mem_max[MAX_MEMCG_LEN] = '\0';
 
-        ctx->args = &argv[4];
+	ctx->args = &argv[6];
 
         ctx->working_dir[0] = '/';
         ctx->working_dir[1] = '\0';
@@ -78,22 +95,13 @@ int handle_child(container_ctx *ctx) {
 }
 
 int handle_parent(container_ctx *ctx) {
-	/*
+	/* LOOK into CLONE_PIDFD for sync and namespace purposes
 	if (setup_network(ctx) < 0) {
 		pr_err("error in setup network\n");
 		return -1;
 	}
 	pr_info("veth created succesfully\n");
 	*/
-
-	if (setup_limits(ctx) != 0) {
-		pr_err("error in setting limits\n");
-		/* TODO: destroy veth ?? */
-		goto reap;
-	}
-	pr_info("limits setup succesful\n");
-
-reap:
 	if (waitpid(ctx->child_pid, NULL, 0) == -1) {
 		pr_err("error in waitpid: %s\n", strerror(errno));
 		/* TODO: destroy veth ?? */
@@ -113,11 +121,25 @@ reap:
  */
 int container_setup(container_ctx* ctx)
 {
-        int flags = CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUTS | CLONE_NEWIPC
-            | CLONE_NEWNET;
+	/* TODO: CLONE_NEWUSER ?? */
+        uint64_t flags = CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUTS | CLONE_NEWIPC
+            | CLONE_NEWNET | CLONE_INTO_CGROUP;
         ctx->flags = flags;
 
-        int pid = syscall(SYS_clone, SIGCHLD | ctx->flags, 0, NULL, NULL, 0);
+	// we will use clone3 to use CLONE_INTO_CGROUP flag, this will allow us
+	// to create the child directly into the cgroup
+	if (setup_limits(ctx) < 0) {
+		pr_err("error in setting cgroup limits\n");
+		return -1;
+	}
+	pr_info("cgroup fd: %zu\n", ctx->cgroup_fd);
+
+	struct clone_args args = {0};
+	args.flags = ctx->flags;
+	args.cgroup = ctx->cgroup_fd;
+	args.exit_signal = SIGCHLD;
+
+        int pid = syscall(SYS_clone3, &args, sizeof(struct clone_args));
         if (pid == -1) {
                 pr_info("error in clone: %s\n", strerror(errno));
                 return -1;
