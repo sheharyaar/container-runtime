@@ -14,6 +14,8 @@
 
 #include "container.h"
 
+int pipe_fd[2]; // Make this global or pass it to the child
+
 void print_usage()
 {
         fprintf(stdout, "Usage:\n");
@@ -58,17 +60,13 @@ int parse_cmd(int argc, char* argv[], container_ctx* ctx)
         }
 
         strncpy(ctx->rootfs, argv[2], MAX_PATH_LEN);
-        if (ctx->rootfs[0] == '\0' || ctx->rootfs[0] != '/') {
-                pr_err("invalid rootfs path, path should be absolute");
+        if (ctx->rootfs[0] == '\0') {
+                pr_err("invalid rootfs path");
                 return -1;
         }
         ctx->rootfs[MAX_PATH_LEN] = '\0';
 
         strncpy(ctx->mem_max, argv[4], MAX_MEMCG_LEN);
-        if (ctx->rootfs[0] == '\0' || ctx->rootfs[0] != '/') {
-                pr_err("invalid rootfs path, path should be absolute");
-                return -1;
-        }
         ctx->mem_max[MAX_MEMCG_LEN] = '\0';
 
 	ctx->args = &argv[6];
@@ -79,7 +77,23 @@ int parse_cmd(int argc, char* argv[], container_ctx* ctx)
 }
 
 int handle_child(container_ctx *ctx) {
-	if (setup_rootfs_child(ctx) != 0) {
+	char ch;
+
+	/* wait for parent's synchronisation */
+	close(pipe_fd[1]);
+
+	pr_info("waiting for parent to synchronise\n");
+	if (read(pipe_fd[0], &ch, 1) != 0) {
+		fprintf(stderr,
+	       "Failure in child: read from pipe returned != 0: %s\n", strerror(errno));
+		return -1;
+	}
+	pr_info("parent work completed\n");
+
+	close(pipe_fd[0]);
+	/* sync complete */
+
+	if (setup_rootfs_childns(ctx) != 0) {
 		pr_err("error in setting up rootfs\n");
 		return -1;
 	}
@@ -95,18 +109,24 @@ int handle_child(container_ctx *ctx) {
 }
 
 int handle_parent(container_ctx *ctx) {
-	/* LOOK into CLONE_PIDFD for sync and namespace purposes
-	if (setup_network(ctx) < 0) {
-		pr_err("error in setup network\n");
-		return -1;
+	if (setup_uid_gid_map(ctx) < 0) {
+		pr_err("error in setting up UID and GID mappings\n");
+		if (kill(ctx->child_pid, SIGKILL) < 0)
+			pr_err("error in killing child: %s\n", strerror(errno));
 	}
-	pr_info("veth created succesfully\n");
-	*/
+
+	close(pipe_fd[1]);
+
 	if (waitpid(ctx->child_pid, NULL, 0) == -1) {
 		pr_err("error in waitpid: %s\n", strerror(errno));
-		/* TODO: destroy veth ?? */
 		return -1;
 	}
+
+	if (rmdir(ctx->cgrp_path) < 0) {
+		pr_err("error in rmdir cgroup directory: %s\n", strerror(errno));
+		return -1;
+	}
+
  	return 0;
 }
 
@@ -121,10 +141,14 @@ int handle_parent(container_ctx *ctx) {
  */
 int container_setup(container_ctx* ctx)
 {
-	/* TODO: CLONE_NEWUSER ?? */
         uint64_t flags = CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUTS | CLONE_NEWIPC
-            | CLONE_NEWNET | CLONE_INTO_CGROUP;
+            | CLONE_NEWNET | CLONE_INTO_CGROUP | CLONE_NEWTIME | CLONE_NEWUSER;
         ctx->flags = flags;
+
+	if (pipe(pipe_fd) < 0) {
+		pr_err("error in pipe: %s\n", strerror(errno));
+		return -1;
+	}
 
 	// we will use clone3 to use CLONE_INTO_CGROUP flag, this will allow us
 	// to create the child directly into the cgroup

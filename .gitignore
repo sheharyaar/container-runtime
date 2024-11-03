@@ -5,3 +5,5 @@ rootfs
 .cache/
 *.o
 compile_commands.json
+
+*.tar.*

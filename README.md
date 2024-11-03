@@ -8,48 +8,31 @@
 $> make
 ```
 
-2. Extract rootfs from a dockerfile :
+2. Download a minimal/base ubuntu root filesystem from https://cdimage.ubuntu.com/ubuntu-base/releases/22.04.4/release/.
+
+3. Extract the rootfs
 ```shell
 # the rootfs will be here
-$ mkdir rootfs && cd rootfs
-
-# run a docker container, it will pull the image
-$ docker run --name nginx nginx:latest
-
-# export the fs
-$ docker export nginx -o nginx.tar.gz
-
-# cleanup the nginx container
-$ docker stop nginx && docker rm -vf nginx
-
-$ tar -xvf nginx.tar.gz
-$ rm nginx.tar.gz
-
-# check the rootfs
-$ ls -la
-
-# now we cannot use this directly as this is present under "/" 
-# which is the current mount, we need to mount it on /tmp
-$ sudo mkdir /tmp/rootfs
-$ sudo mount --bind ./rootfs /tmp/rootfs
+$ mkdir rootfs
+$ tar xzvf <tar file> -C rootfs
 ```
 
 3. Run the program as root :
 ```
-#> ./container --rootfs <root_fs_path> -- <command> [command_args]
+#> ./container --rootfs <root_fs_path> --memory <memory_limit> -- <command> [command_args]
 
-Example:
-#> ./container --rootfs /tmp/rootfs -- /bin/bash
+Example (from the previous step of ubuntu image):
+#> ./container --rootfs ./rootfs --memory 1G -- /bin/bash
 ```
 
 Remember, the rootfs cannot be on the current mounted root, `pivot_root` will give out error.
 
-### TODO
+### Status
 
+- [X] UID and GID mapping
 - [X] clone setup
 - [X] filesystem Setup
-- [ ] cgroup limits setup
-- [ ] environment var and tty setup
+- [X] cgroup limits setup
 - [ ] network setup (to be done after I study more about kernel networking and netlink, or as part of CNI implementation in near future)
 
 ## Playground

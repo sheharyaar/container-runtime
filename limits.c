@@ -8,7 +8,8 @@
 #include "container.h"
 #define CGROUP_DIR "lagnos"
 
-int setup_limits(container_ctx* ctx) {
+int setup_limits(container_ctx* ctx)
+{
 	// setup cgroup limit in directory and then set ctx->cgroup_fd to the cgroup fd
 	// for clone flag
 	char cgroup_path[128];
@@ -18,6 +19,7 @@ int setup_limits(container_ctx* ctx) {
 	int fd, mem_fd;
 
 	snprintf(cgroup_path, 128, "/sys/fs/cgroup/%s", CGROUP_DIR);
+	memcpy(ctx->cgrp_path, cgroup_path, 128);
 	snprintf(memcg_path, 156, "%s/memory.max", cgroup_path);
 	snprintf(memcg_swap, 156, "%s/memory.swap.max", cgroup_path);
 	snprintf(memcg_zswap, 156, "%s/memory.zswap.max", cgroup_path);
